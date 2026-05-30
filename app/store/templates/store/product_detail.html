@@ -1,0 +1,17 @@
+{% extends 'store/base.html' %}
+
+{% block content %}
+<h2>{{ product.name }}</h2>
+<p><b>Категория:</b> {{ product.category.name }}</p>
+<p><b>Цена:</b> {{ product.price }} руб.</p>
+<p><b>В наличии:</b> {{ product.stock }} шт.</p>
+
+{% if product.image_url %}
+    <img src="{{ product.image_url }}" alt="{{ product.name }}" style="max-width: 300px; display: block; margin: 20px 0;">
+{% endif %}
+
+<p><b>Описание:</b><br>{{ product.description }}</p>
+
+<a href="{% url 'add_to_cart' product.id %}" class="btn" style="background-color: #27ae60;">Добавить в корзину</a>
+<a href="{% url 'product_list' %}" class="btn" style="background-color: #95a5a6;">Назад в каталог</a>
+{% endblock %}

@@ -1,0 +1,76 @@
+﻿@startuml
+skinparam handwritten false
+skinparam shadowing false
+skinparam defaultFontName Arial
+
+entity "Пользователь" as User {
+  * id
+  --
+  username
+  email
+  password
+  role
+}
+
+entity "Категория" as Category {
+  * id
+  --
+  name
+  slug
+  description
+}
+
+entity "Товар" as Product {
+  * id
+  --
+  category_id
+  name
+  description
+  price
+  stock
+  image
+  specifications
+}
+
+entity "Корзина" as Cart {
+  * id
+  --
+  user_id
+  created_at
+}
+
+entity "Позиция корзины" as CartItem {
+  * id
+  --
+  cart_id
+  product_id
+  quantity
+}
+
+entity "Заказ" as Order {
+  * id
+  --
+  user_id
+  status
+  total_price
+  delivery_address
+  created_at
+}
+
+entity "Позиция заказа" as OrderItem {
+  * id
+  --
+  order_id
+  product_id
+  quantity
+  price
+}
+
+User ||--o{ Cart
+User ||--o{ Order
+Category ||--o{ Product
+Cart ||--o{ CartItem
+Product ||--o{ CartItem
+Order ||--o{ OrderItem
+Product ||--o{ OrderItem
+@enduml

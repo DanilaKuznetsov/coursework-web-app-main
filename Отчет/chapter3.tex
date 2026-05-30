@@ -1,0 +1,88 @@
+\section*{Глава 3. Разработка веб-приложения}
+\addcontentsline{toc}{section}{Глава 3. Разработка веб-приложения}
+\stepcounter{section}
+
+\subsection{Разработка базовой структуры приложения и вёрстка интерфейса}
+
+Разработка веб-приложения была выполнена на основе фреймворка Django. Для максимальной простоты и удобства понимания весь основной функционал магазина был вынесен в одно приложение \texttt{store}. Это позволяет избежать излишней сложности и легко отслеживать связи между товарами, корзиной и заказами.
+
+Интерфейс спроектирован с использованием базовых HTML-шаблонов и CSS (стили встроены напрямую в базовый шаблон для простоты чтения кода). Пользователю доступны главная страница с каталогом товаров, страница с детальной информацией о товаре, корзина, оформление заказа и история покупок.
+
+\subsection{Проектирование моделей данных (товары и заказы)}
+
+Для хранения информации в базе данных (используется стандартная база SQLite) были созданы понятные модели. Основными являются \texttt{Category} (Категория) и \texttt{Product} (Товар). 
+
+\begin{lstlisting}[caption={Модели товаров и категорий}, language=Python]
+class Category(models.Model):
+    name = models.CharField(max_length=255, verbose_name="Название")
+    description = models.TextField(blank=True)
+
+class Product(models.Model):
+    category = models.ForeignKey(Category, on_delete=models.CASCADE)
+    name = models.CharField(max_length=255)
+    description = models.TextField()
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+    stock = models.PositiveIntegerField(default=0)
+\end{lstlisting}
+
+Связь между ними организована по принципу "один ко многим" (одна категория может содержать много товаров).
+
+\subsection{Реализация корзины товаров}
+
+Корзина товаров реализована наиболее простым и логичным способом — через встроенные сессии Django (\texttt{request.session}). Это значит, что корзина хранится во временной памяти сервера для каждого пользователя (даже неавторизованного) и не требует создания сложных таблиц в базе данных. В сессии хранится словарь, где ключ — это ID товара, а значение — его количество.
+
+\begin{lstlisting}[caption={Добавление товара в корзину}, language=Python]
+def add_to_cart(request, product_id):
+    if 'cart' not in request.session:
+        request.session['cart'] = {}
+    cart = request.session['cart']
+    
+    product_id_str = str(product_id)
+    if product_id_str in cart:
+        cart[product_id_str] += 1 # увеличиваем количество
+    else:
+        cart[product_id_str] = 1  # добавляем новый товар
+        
+    request.session.modified = True
+    return redirect('cart_detail')
+\end{lstlisting}
+
+\subsection{Оформление заказа и аутентификация}
+
+Для оформления заказа пользователь должен быть авторизован. Мы использовали стандартную модель \texttt{User} из Django, что избавило от необходимости писать систему регистрации с нуля. Авторизованный покупатель может заполнить адрес, после чего содержимое его корзины из сессии переносится в базу данных в виде \texttt{Order} (Заказ) и \texttt{OrderItem} (Позиции заказа). Цены фиксируются на момент покупки.
+
+\begin{lstlisting}[caption={Оформление заказа}, language=Python]
+@login_required
+def checkout(request):
+    cart = request.session.get('cart', {})
+    if request.method == 'POST':
+        address = request.POST.get('address')
+        # Создаем заказ в базе данных
+        order = Order.objects.create(user=request.user, address=address)
+        # Логика переноса товаров из корзины в позиции заказа...
+        request.session['cart'] = {} # Очищаем корзину после заказа
+        return redirect('order_history')
+    return render(request, 'store/checkout.html')
+\end{lstlisting}
+
+\subsection{Реализация поиска и фильтрации товаров}
+
+Для удобства пользователей на главной странице добавлен поиск и фильтрация. Поиск осуществляется по названию товара с использованием простого фильтра \texttt{icontains} (поиск подстроки без учета регистра), а фильтрация — по точному совпадению ID категории.
+
+\begin{lstlisting}[caption={Поиск и фильтрация в каталоге}, language=Python]
+def product_list(request):
+    query = request.GET.get('q', '')
+    category_id = request.GET.get('category', '')
+    
+    products = Product.objects.all()
+    if query: # Если есть поисковый запрос
+        products = products.filter(name__icontains=query)
+    if category_id: # Если выбрана категория
+        products = products.filter(category_id=category_id)
+        
+    return render(request, 'store/product_list.html', {'products': products})
+\end{lstlisting}
+
+Таким образом, веб-приложение реализует весь необходимый функционал интернет-магазина, оставаясь при этом логичным, легко читаемым и удобным для дальнейшего расширения или изучения на любительском уровне.
+
+Исходный код разработанного веб-приложения доступен в репозитории на платформе GitHub по ссылке: \url{https://github.com/DanilaKuznetsov/coursework-web-app-main}. Доступ к репозиторию предоставлен проверяющему (GitHub: \texttt{akruzhalov}).

@@ -1,0 +1,65 @@
+\documentclass[14pt, a4paper]{extarticle}
+\usepackage{mospolytech_coursework}
+\usepackage{float}
+\usepackage{makecell}
+
+% Определение данных
+\newcommand{\theme}{%
+    Разработка веб-приложения для управления ассортиментом и заказами
+магазина цифровой электроники%
+}
+\newcommand{\subject}{Разработка веб-приложений}
+\newcommand{\student}{Кузнецов Данила Ростиславович}
+\newcommand{\group}{241-327}
+\newcommand{\teacher}{Кружалов Алексей Сергеевич}
+
+\begin{document}
+\pagestyle{plain}
+\setcounter{tocdepth}{2}
+
+% Титульный лист
+\include{title}
+
+% Задание
+\includepdf[pages=-]{task.pdf}
+\clearpage
+
+% Содержание
+\tableofcontents
+
+
+% Введение
+\include{intro}
+
+% Основная часть
+\clearpage
+\include{chapter1}
+\clearpage
+\include{chapter2}
+\clearpage
+\include{chapter3}
+
+% Заключение
+\clearpage
+\include{conclusion}
+
+% Список литературы
+\addcontentsline{toc}{section}{Список литературы}
+\begin{thebibliography}{9}
+    \bibitem{django_docs}
+    Django documentation. URL: \url{https://docs.djangoproject.com/} (дата обращения: 24.04.2026).
+
+    \bibitem{flask_docs}
+    Flask documentation. URL: \url{https://flask.palletsprojects.com/} (дата обращения: 24.04.2026).
+
+    \bibitem{fastapi_docs}
+    FastAPI documentation. URL: \url{https://fastapi.tiangolo.com/} (дата обращения: 24.04.2026).
+
+    \bibitem{gost_report}
+    ГОСТ 7.32-2017. Отчет о научно-исследовательской работе. Структура и правила оформления. М.: Стандартинформ, 2017.
+\end{thebibliography}
+
+% Приложения (при необходимости)
+% \include{appendix}
+
+\end{document}
