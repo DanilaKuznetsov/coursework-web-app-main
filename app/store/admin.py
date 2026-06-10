@@ -1,5 +1,15 @@
 from django.contrib import admin
-from .models import Category, Product, Order, OrderItem
+from django.contrib.auth.admin import UserAdmin
+from .models import User, Category, Product, Order, OrderItem, Cart, CartItem
+
+class CustomUserAdmin(UserAdmin):
+    model = User
+    fieldsets = UserAdmin.fieldsets + (
+        (None, {'fields': ('role',)}),
+    )
+    add_fieldsets = UserAdmin.add_fieldsets + (
+        (None, {'fields': ('role',)}),
+    )
 
 class OrderItemInline(admin.TabularInline):
     model = OrderItem
@@ -10,6 +20,9 @@ class OrderAdmin(admin.ModelAdmin):
     list_filter = ['status', 'created_at']
     inlines = [OrderItemInline]
 
+admin.site.register(User, CustomUserAdmin)
 admin.site.register(Category)
 admin.site.register(Product)
 admin.site.register(Order, OrderAdmin)
+admin.site.register(Cart)
+admin.site.register(CartItem)

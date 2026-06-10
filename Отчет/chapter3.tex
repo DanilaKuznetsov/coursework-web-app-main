@@ -8,60 +8,78 @@
 
 Интерфейс спроектирован с использованием базовых HTML-шаблонов и CSS (стили встроены напрямую в базовый шаблон для простоты чтения кода). Пользователю доступны главная страница с каталогом товаров, страница с детальной информацией о товаре, корзина, оформление заказа и история покупок.
 
-\subsection{Проектирование моделей данных (товары и заказы)}
+\subsection{Проектирование моделей данных (пользователи, товары и заказы)}
 
-Для хранения информации в базе данных (используется стандартная база SQLite) были созданы понятные модели. Основными являются \texttt{Category} (Категория) и \texttt{Product} (Товар). 
+Для хранения информации в базе данных (используется стандартная база SQLite) были созданы модели, полностью соответствующие спроектированной архитектуре. В качестве модели пользователя применяется кастомная модель \texttt{User}, расширяющая стандартный класс \texttt{AbstractUser} и включающая поле \texttt{role} для определения прав доступа (покупатель, менеджер, администратор). Основными сущностями для каталога являются \texttt{Category} (Категория) и \texttt{Product} (Товар). 
 
 \begin{lstlisting}[caption={Модели товаров и категорий}, language=Python]
 class Category(models.Model):
     name = models.CharField(max_length=255, verbose_name="Название")
-    description = models.TextField(blank=True)
+    slug = models.SlugField(max_length=255, unique=True, null=True, verbose_name="Slug")
+    description = models.TextField(blank=True, verbose_name="Описание")
 
 class Product(models.Model):
-    category = models.ForeignKey(Category, on_delete=models.CASCADE)
-    name = models.CharField(max_length=255)
-    description = models.TextField()
-    price = models.DecimalField(max_digits=10, decimal_places=2)
-    stock = models.PositiveIntegerField(default=0)
+    category = models.ForeignKey(Category, on_delete=models.CASCADE, verbose_name="Категория")
+    name = models.CharField(max_length=255, verbose_name="Название")
+    description = models.TextField(verbose_name="Описание")
+    price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Цена")
+    stock = models.PositiveIntegerField(default=0, verbose_name="Остаток на складе")
+    image = models.ImageField(upload_to='products/', blank=True, null=True, verbose_name="Фото")
+    specifications = models.TextField(blank=True, null=True, verbose_name="Характеристики")
 \end{lstlisting}
 
-Связь между ними организована по принципу "один ко многим" (одна категория может содержать много товаров).
+Связь между ними организована по принципу "один ко многим" (одна категория может содержать много товаров). Для хранения фотографий применяется поле \texttt{ImageField}.
 
 \subsection{Реализация корзины товаров}
 
-Корзина товаров реализована наиболее простым и логичным способом — через встроенные сессии Django (\texttt{request.session}). Это значит, что корзина хранится во временной памяти сервера для каждого пользователя (даже неавторизованного) и не требует создания сложных таблиц в базе данных. В сессии хранится словарь, где ключ — это ID товара, а значение — его количество.
+В отличие от упрощенных реализаций, корзина в данном приложении полноценно хранится в базе данных. Для этого спроектированы две взаимосвязанные модели: \texttt{Cart} (Корзина), которая привязывается к пользователю, и \texttt{CartItem} (Позиция корзины), хранящая информацию о добавленном товаре и его количестве. Это обеспечивает надежность хранения данных пользователя между сессиями.
 
-\begin{lstlisting}[caption={Добавление товара в корзину}, language=Python]
+\begin{lstlisting}[caption={Добавление товара в корзину БД}, language=Python]
+@login_required(login_url='/login/')
 def add_to_cart(request, product_id):
-    if 'cart' not in request.session:
-        request.session['cart'] = {}
-    cart = request.session['cart']
+    cart, created = Cart.objects.get_or_create(user=request.user)
+    product = get_object_or_404(Product, id=product_id)
+    cart_item, created = CartItem.objects.get_or_create(cart=cart, product=product)
     
-    product_id_str = str(product_id)
-    if product_id_str in cart:
-        cart[product_id_str] += 1 # увеличиваем количество
-    else:
-        cart[product_id_str] = 1  # добавляем новый товар
+    if not created:
+        cart_item.quantity += 1
+        cart_item.save()
         
-    request.session.modified = True
     return redirect('cart_detail')
 \end{lstlisting}
 
 \subsection{Оформление заказа и аутентификация}
 
-Для оформления заказа пользователь должен быть авторизован. Мы использовали стандартную модель \texttt{User} из Django, что избавило от необходимости писать систему регистрации с нуля. Авторизованный покупатель может заполнить адрес, после чего содержимое его корзины из сессии переносится в базу данных в виде \texttt{Order} (Заказ) и \texttt{OrderItem} (Позиции заказа). Цены фиксируются на момент покупки.
+Для оформления заказа пользователь должен быть авторизован. Мы использовали кастомную модель \texttt{User} и создали собственную форму регистрации \texttt{CustomUserCreationForm}, что позволяет корректно обрабатывать новые поля, такие как роль пользователя. Авторизованный покупатель заполняет адрес доставки (\texttt{delivery\_address}), после чего содержимое его корзины из таблиц \texttt{Cart} и \texttt{CartItem} переносится в базу данных заказов в виде \texttt{Order} (Заказ) и \texttt{OrderItem} (Позиции заказа). Корзина при этом очищается, а цены товаров жестко фиксируются на момент совершения покупки.
 
 \begin{lstlisting}[caption={Оформление заказа}, language=Python]
-@login_required
+@login_required(login_url='/login/')
 def checkout(request):
-    cart = request.session.get('cart', {})
+    cart, _ = Cart.objects.get_or_create(user=request.user)
+    cart_items = cart.items.all()
+    if not cart_items:
+        return redirect('product_list')
+        
     if request.method == 'POST':
-        address = request.POST.get('address')
-        # Создаем заказ в базе данных
-        order = Order.objects.create(user=request.user, address=address)
-        # Логика переноса товаров из корзины в позиции заказа...
-        request.session['cart'] = {} # Очищаем корзину после заказа
+        delivery_address = request.POST.get('delivery_address')
+        order = Order.objects.create(
+            user=request.user,
+            delivery_address=delivery_address,
+            total_price=0
+        )
+        total = sum(item.product.price * item.quantity for item in cart_items)
+        
+        for item in cart_items:
+            OrderItem.objects.create(
+                order=order, product=item.product,
+                quantity=item.quantity, price=item.product.price
+            )
+            
+        order.total_price = total
+        order.save()
+        cart.items.all().delete() # Очищаем корзину после заказа
         return redirect('order_history')
+        
     return render(request, 'store/checkout.html')
 \end{lstlisting}
 
@@ -80,9 +98,14 @@ def product_list(request):
     if category_id: # Если выбрана категория
         products = products.filter(category_id=category_id)
         
-    return render(request, 'store/product_list.html', {'products': products})
+    categories = Category.objects.all()
+    return render(request, 'store/product_list.html', {
+        'products': products,
+        'categories': categories,
+        'query': query
+    })
 \end{lstlisting}
 
-Таким образом, веб-приложение реализует весь необходимый функционал интернет-магазина, оставаясь при этом логичным, легко читаемым и удобным для дальнейшего расширения или изучения на любительском уровне.
+Таким образом, веб-приложение реализует весь необходимый функционал интернет-магазина, оставаясь при этом логичным, легко читаемым и соответствующим первоначальной архитектуре базы данных.
 
 Исходный код разработанного веб-приложения доступен в репозитории на платформе GitHub по ссылке: \url{https://github.com/DanilaKuznetsov/coursework-web-app-main}. Доступ к репозиторию предоставлен проверяющему (GitHub: \texttt{akruzhalov}).

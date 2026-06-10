@@ -6,7 +6,7 @@
 <form method="post" style="max-width: 500px;">
     {% csrf_token %}
     <label>Адрес доставки:</label>
-    <input type="text" name="address" required placeholder="Город, Улица, Дом, Квартира">
+    <input type="text" name="delivery_address" required placeholder="Город, Улица, Дом, Квартира">
     
     <button type="submit" class="btn" style="background-color: #e67e22; width: 100%;">Подтвердить заказ</button>
 </form>
