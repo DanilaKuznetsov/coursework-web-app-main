@@ -30,21 +30,26 @@ class Product(models.Model):
 
 Связь между ними организована по принципу "один ко многим" (одна категория может содержать много товаров). Для хранения фотографий применяется поле \texttt{ImageField}.
 
-\subsection{Реализация корзины товаров}
+\subsection{Реализация корзины товаров и управления количеством}
 
-В отличие от упрощенных реализаций, корзина в данном приложении полноценно хранится в базе данных. Для этого спроектированы две взаимосвязанные модели: \texttt{Cart} (Корзина), которая привязывается к пользователю, и \texttt{CartItem} (Позиция корзины), хранящая информацию о добавленном товаре и его количестве. Это обеспечивает надежность хранения данных пользователя между сессиями.
+В отличие от упрощенных реализаций, корзина в данном приложении полноценно хранится в базе данных. Для этого спроектированы две взаимосвязанные модели: \texttt{Cart} (Корзина), которая привязывается к пользователю, и \texttt{CartItem} (Позиция корзины), хранящая информацию о добавленном товаре и его количестве. Пользователь имеет возможность не только добавлять товары в корзину, но и гибко изменять их количество с помощью кнопок интерфейса. При достижении нулевого количества товар автоматически удаляется из корзины.
 
-\begin{lstlisting}[caption={Добавление товара в корзину БД}, language=Python]
+\begin{lstlisting}[caption={Динамическое изменение количества товара в корзине}, language=Python]
 @login_required(login_url='/login/')
-def add_to_cart(request, product_id):
-    cart, created = Cart.objects.get_or_create(user=request.user)
-    product = get_object_or_404(Product, id=product_id)
-    cart_item, created = CartItem.objects.get_or_create(cart=cart, product=product)
-    
-    if not created:
+def update_cart_item(request, product_id, action):
+    cart = get_object_or_404(Cart, user=request.user)
+    cart_item = get_object_or_404(CartItem, cart=cart, product_id=product_id)
+
+    if action == 'increase':
         cart_item.quantity += 1
         cart_item.save()
-        
+    elif action == 'decrease':
+        if cart_item.quantity > 1:
+            cart_item.quantity -= 1
+            cart_item.save()
+        else:
+            cart_item.delete()
+
     return redirect('cart_detail')
 \end{lstlisting}
 
@@ -83,29 +88,61 @@ def checkout(request):
     return render(request, 'store/checkout.html')
 \end{lstlisting}
 
-\subsection{Реализация поиска и фильтрации товаров}
+\subsection{Реализация поиска, фильтрации и сортировки товаров}
 
-Для удобства пользователей на главной странице добавлен поиск и фильтрация. Поиск осуществляется по названию товара с использованием простого фильтра \texttt{icontains} (поиск подстроки без учета регистра), а фильтрация — по точному совпадению ID категории.
+Для удобства пользователей на главной странице реализована комплексная система подбора товаров. Пользователь может осуществлять поиск по названию (\texttt{icontains}), фильтровать каталог по выбранной категории, а также сортировать полученный список. Доступны сортировки: от дешевых к дорогим, от дорогих к дешевым, и по алфавиту. Все параметры передаются через GET-запросы, что позволяет пользователям делиться ссылками на отфильтрованные списки.
 
-\begin{lstlisting}[caption={Поиск и фильтрация в каталоге}, language=Python]
+\begin{lstlisting}[caption={Поиск, фильтрация и сортировка каталога}, language=Python]
 def product_list(request):
     query = request.GET.get('q', '')
     category_id = request.GET.get('category', '')
+    sort_by = request.GET.get('sort', '')
     
     products = Product.objects.all()
-    if query: # Если есть поисковый запрос
+    if query:
         products = products.filter(name__icontains=query)
-    if category_id: # Если выбрана категория
+    if category_id:
         products = products.filter(category_id=category_id)
+        
+    if sort_by == 'price_asc':
+        products = products.order_by('price')
+    elif sort_by == 'price_desc':
+        products = products.order_by('-price')
+    elif sort_by == 'name':
+        products = products.order_by('name')
         
     categories = Category.objects.all()
     return render(request, 'store/product_list.html', {
         'products': products,
         'categories': categories,
-        'query': query
+        'query': query,
+        'selected_category': category_id,
+        'sort_by': sort_by
     })
 \end{lstlisting}
 
-Таким образом, веб-приложение реализует весь необходимый функционал интернет-магазина, оставаясь при этом логичным, легко читаемым и соответствующим первоначальной архитектуре базы данных.
+\subsection{Разграничение прав доступа и панель менеджера}
+
+В системе реализован механизм Role-Based Access Control (RBAC). При помощи поля \texttt{role} в модели пользователя система различает обычных покупателей и менеджеров магазина. Для менеджеров реализована отдельная защищенная страница управления заказами, доступ к которой обычным пользователям заблокирован. Менеджер имеет возможность просматривать все заказы, оставленные в магазине, и изменять их статус (например, переводить заказ из статуса "В обработке" в "Доставлен" или "Отменен").
+
+\begin{lstlisting}[caption={Обработка заказов менеджером}, language=Python]
+@login_required(login_url='/login/')
+def change_order_status(request, order_id):
+    if request.user.role != 'manager' and not request.user.is_superuser:
+        return HttpResponseForbidden("Доступ разрешен только менеджерам.")
+        
+    if request.method == 'POST':
+        order = get_object_or_404(Order, id=order_id)
+        new_status = request.POST.get('status')
+        if new_status in dict(Order.STATUS_CHOICES):
+            order.status = new_status
+            order.save()
+            
+    return redirect('manager_orders')
+\end{lstlisting}
+
+Таким образом, веб-приложение реализует весь необходимый функционал полноценного интернет-магазина, оставаясь при этом логичным, легко читаемым и соответствующим архитектуре современных веб-приложений.
 
 Исходный код разработанного веб-приложения доступен в репозитории на платформе GitHub по ссылке: \url{https://github.com/DanilaKuznetsov/coursework-web-app-main}. Доступ к репозиторию предоставлен проверяющему (GitHub: \texttt{akruzhalov}).
+
+Развернутая версия веб-приложения доступна в сети Интернет по адресу: \url{https://electronics-store-o69j.onrender.com}.
