@@ -6,7 +6,19 @@ from django.core.files.base import ContentFile
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'core.settings')
 django.setup()
 
-from store.models import Category, Product
+from store.models import Category, Product, User
+
+# Создание пользователей
+if not User.objects.filter(username='admin').exists():
+    User.objects.create_superuser('admin', 'admin@example.com', 'admin')
+if not User.objects.filter(username='manager').exists():
+    u = User.objects.create_user('manager', 'manager@example.com', 'manager123')
+    u.role = 'manager'
+    u.save()
+if not User.objects.filter(username='user').exists():
+    u = User.objects.create_user('user', 'user@example.com', 'user123')
+    u.role = 'buyer'
+    u.save()
 
 Category.objects.all().delete()
 Product.objects.all().delete()
