@@ -8,6 +8,7 @@ from .forms import CustomUserCreationForm
 def product_list(request):
     query = request.GET.get('q', '')
     category_id = request.GET.get('category', '')
+    sort_by = request.GET.get('sort', '')
     
     products = Product.objects.all()
     if query:
@@ -15,11 +16,20 @@ def product_list(request):
     if category_id:
         products = products.filter(category_id=category_id)
         
+    if sort_by == 'price_asc':
+        products = products.order_by('price')
+    elif sort_by == 'price_desc':
+        products = products.order_by('-price')
+    elif sort_by == 'name':
+        products = products.order_by('name')
+        
     categories = Category.objects.all()
     return render(request, 'store/product_list.html', {
         'products': products,
         'categories': categories,
         'query': query,
+        'sort_by': sort_by,
+        'selected_category': category_id,
     })
 
 def product_detail(request, pk):
@@ -47,6 +57,23 @@ def add_to_cart(request, product_id):
 def remove_from_cart(request, product_id):
     cart = get_cart(request)
     CartItem.objects.filter(cart=cart, product_id=product_id).delete()
+    return redirect('cart_detail')
+
+@login_required(login_url='/login/')
+def update_cart_item(request, product_id, action):
+    cart = get_cart(request)
+    cart_item = get_object_or_404(CartItem, cart=cart, product_id=product_id)
+    
+    if action == 'increase':
+        cart_item.quantity += 1
+        cart_item.save()
+    elif action == 'decrease':
+        cart_item.quantity -= 1
+        if cart_item.quantity <= 0:
+            cart_item.delete()
+        else:
+            cart_item.save()
+            
     return redirect('cart_detail')
 
 @login_required(login_url='/login/')
@@ -104,6 +131,27 @@ def checkout(request):
 def order_history(request):
     orders = Order.objects.filter(user=request.user).order_by('-created_at')
     return render(request, 'store/order_history.html', {'orders': orders})
+
+# --- Управление для менеджера ---
+
+@login_required(login_url='/login/')
+def manager_orders(request):
+    if request.user.role not in ['manager', 'admin']:
+        return redirect('product_list')
+    orders = Order.objects.all().order_by('-created_at')
+    return render(request, 'store/manager_orders.html', {'orders': orders})
+
+@login_required(login_url='/login/')
+def change_order_status(request, order_id):
+    if request.user.role not in ['manager', 'admin']:
+        return redirect('product_list')
+    if request.method == 'POST':
+        order = get_object_or_404(Order, id=order_id)
+        new_status = request.POST.get('status')
+        if new_status in dict(Order.STATUS_CHOICES).keys():
+            order.status = new_status
+            order.save()
+    return redirect('manager_orders')
 
 # --- Авторизация ---
 

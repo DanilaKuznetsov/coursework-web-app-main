@@ -66,6 +66,12 @@
             <a href="{% url 'cart_detail' %}">Корзина</a>
             {% if user.is_authenticated %}
                 <a href="{% url 'order_history' %}">Мои заказы</a>
+                {% if user.role == 'manager' or user.role == 'admin' %}
+                    <a href="{% url 'manager_orders' %}" style="color: #f1c40f;">Управление заказами</a>
+                {% endif %}
+                {% if user.role == 'admin' %}
+                    <a href="/admin/" style="color: #e74c3c;">Админ-панель</a>
+                {% endif %}
                 <span>({{ user.username }})</span>
                 <a href="{% url 'logout' %}">Выйти</a>
             {% else %}

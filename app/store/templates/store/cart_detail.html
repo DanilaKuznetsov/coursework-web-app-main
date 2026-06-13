@@ -14,7 +14,11 @@
         {% for item in cart_items %}
         <tr style="border-bottom: 1px solid #ccc;">
             <td style="padding: 10px;">{{ item.product.name }}</td>
-            <td style="padding: 10px;">{{ item.quantity }}</td>
+            <td style="padding: 10px; display: flex; align-items: center; gap: 10px;">
+                <a href="{% url 'update_cart_item' item.product.id 'decrease' %}" style="text-decoration: none; padding: 5px 10px; background: #eee; border-radius: 3px; color: black; font-weight: bold;">-</a>
+                <span>{{ item.quantity }}</span>
+                <a href="{% url 'update_cart_item' item.product.id 'increase' %}" style="text-decoration: none; padding: 5px 10px; background: #eee; border-radius: 3px; color: black; font-weight: bold;">+</a>
+            </td>
             <td style="padding: 10px;">{{ item.total_price }} руб.</td>
             <td style="padding: 10px;">
                 <a href="{% url 'remove_from_cart' item.product.id %}" style="color: red; text-decoration: none;">Удалить</a>
